@@ -16,28 +16,42 @@
 
 package com.example.android.mediarecorder;
 
+import android.Manifest;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
 
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import com.example.android.common.media.CameraHelper;
+import com.example.android.common.media.ContantsDefine;
 
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * This activity uses the camera/camcorder as the A/V source for the
@@ -51,10 +65,11 @@ public class MainActivity extends AppCompatActivity {
     private TextureView mPreview;
     private MediaRecorder mMediaRecorder;
     private File mOutputFile;
-
+    FrameLayout frameln_surface_view;
     private boolean isRecording = false;
     private static final String TAG = "Recorder";
     private Button captureButton;
+    int cameraViewHeight =0, cameraViewWidth =0, cameraViewHeight_old = 0, cameraViewWidth_old = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,13 +78,41 @@ public class MainActivity extends AppCompatActivity {
 
         mPreview = findViewById(R.id.surface_view);
         captureButton = findViewById(R.id.button_capture);
-
-        int height = mPreview.getLayoutParams().height;;
-        int width =mPreview.getLayoutParams().width;;
-        updateTextureViewSize(width/2, height);
+        frameln_surface_view = findViewById(R.id.frameln_surface_view);
+        //updateTextureViewSize(width/2, height);
     }
-    private void updateTextureViewSize(int viewWidth, int viewHeight) {
-        mPreview.setLayoutParams(new FrameLayout.LayoutParams(viewWidth, viewHeight));
+    private void updateTextureViewSize(final int viewWidth, final int viewHeight, final int viewWidth_old, final int viewHeight_old) {
+
+        final int viewWidthDuration = viewWidth - viewWidth_old;
+        final int viewHeightDuration = viewHeight - viewHeight_old;
+        final float durationRatio = (float)viewWidthDuration/(float)viewHeightDuration;
+
+        new CountDownTimer(Math.abs(viewHeightDuration)*3, 60) {
+            int durationCount = 0;
+            public void onTick(long millisUntilFinished) {
+                if(Math.abs(viewHeightDuration)>durationCount)
+                {
+                    int viewWidth_current = 0;
+                    int viewHeight_current = 0;
+                    if(viewHeightDuration>0)
+                        viewHeight_current = viewHeight_old + durationCount;
+                    else
+                        viewHeight_current = viewHeight_old - durationCount;
+
+                    if(viewWidthDuration>0)
+                        viewWidth_current = (int) (viewWidth_old + durationCount*durationRatio);
+                    else
+                        viewWidth_current = (int) (viewWidth_old - durationCount*durationRatio);
+                    frameln_surface_view.setLayoutParams(new FrameLayout.LayoutParams(viewWidth_current, viewHeight_current));
+                    durationCount += 20;
+                }
+            }
+
+            public void onFinish() {
+                frameln_surface_view.setLayoutParams(new FrameLayout.LayoutParams(viewWidth, viewHeight));
+            }
+
+        }.start();
     }
     /**
      * The capture button controls all user interaction. When recording, the button click
@@ -80,6 +123,14 @@ public class MainActivity extends AppCompatActivity {
      * @param view the view generating the event.
      */
     public void onCaptureClick(View view) {
+        if(cameraViewHeight==0 )
+            cameraViewHeight = mPreview.getMeasuredHeight();
+         if (cameraViewWidth==0)
+             cameraViewWidth= mPreview.getMeasuredWidth();;
+        updateTextureViewSize(cameraViewWidth/2, cameraViewHeight/2, cameraViewWidth , cameraViewHeight);
+        boolean permissionResult = CameraHelper.checkPermissionAndOpenCamera(this);
+        if(!permissionResult)
+            return;
         if (isRecording) {
             // BEGIN_INCLUDE(stop_release_media_recorder)
 
@@ -91,7 +142,8 @@ public class MainActivity extends AppCompatActivity {
                 // In this case the output file is not properly constructed ans should be deleted.
                 Log.d(TAG, "RuntimeException: stop() is called immediately after start()");
                 //noinspection ResultOfMethodCallIgnored
-                mOutputFile.delete();
+                if(mOutputFile!=null)
+                    mOutputFile.delete();
             }
             releaseMediaRecorder(); // release the MediaRecorder object
             mCamera.lock();         // take camera access back from MediaRecorder
@@ -222,6 +274,19 @@ public class MainActivity extends AppCompatActivity {
      * Asynchronous task for preparing the {@link android.media.MediaRecorder} since it's a long blocking
      * operation.
      */
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        // TODO Fix no activity available
+        super.onActivityResult(requestCode, resultCode, data);
+        if (data == null)
+            return;
+        switch (requestCode) {
+            case ContantsDefine.REQUEST_ACCESS_CAMERA_AND_WRITE_EXTENAL_STORAGE:
+                if (resultCode == RESULT_OK) {
+                    //open again camera when request permission successful
+                    //prepareVideoRecorder();
+                }
+        }
+    }
     public static final int MEDIA_TYPE_IMAGE = 1;
     public static final int MEDIA_TYPE_VIDEO = 2;
 
@@ -229,6 +294,7 @@ public class MainActivity extends AppCompatActivity {
     private static Uri getOutputMediaFileUri(int type){
         return Uri.fromFile(getOutputMediaFile(type));
     }
+
 
     /** Create a File for saving an image or video */
     private static File getOutputMediaFile(int type){
@@ -271,9 +337,18 @@ public class MainActivity extends AppCompatActivity {
             if (prepareVideoRecorder()) {
                 // Camera is available and unlocked, MediaRecorder is prepared,
                 // now you can start recording
-                mMediaRecorder.start();
+                try {
+                    mMediaRecorder.start();
+                    isRecording = true;
+                } catch (RuntimeException e) {
+                    // RuntimeException is thrown when stop() is called immediately after start().
+                    // In this case the output file is not properly constructed ans should be deleted.
+                    Log.d(TAG, "RuntimeException: stop() is called immediately after start()");
+                    //noinspection ResultOfMethodCallIgnored
+                    //mOutputFile.delete();
+                }
 
-                isRecording = true;
+
             } else {
                 // prepare didn't work, release the camera
                 releaseMediaRecorder();
@@ -291,5 +366,4 @@ public class MainActivity extends AppCompatActivity {
             setCaptureButtonText("Stop");
         }
     }
-
 }

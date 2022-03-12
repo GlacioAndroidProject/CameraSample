@@ -22,10 +22,13 @@ import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Camera;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.provider.Settings;
 import android.util.Log;
 
 import androidx.core.app.ActivityCompat;
@@ -33,6 +36,7 @@ import androidx.core.content.ContextCompat;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -44,7 +48,13 @@ public class CameraHelper {
     private static final int MY_CAMERA_REQUEST_CODE = 100;
     public static final int MEDIA_TYPE_IMAGE = 1;
     public static final int MEDIA_TYPE_VIDEO = 2;
-
+    public static String[] permissions = new String[]{
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            //Manifest.permission.MANAGE_EXTERNAL_STORAGE,
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+    };
     /**
      * Iterate over supported camera video sizes to see which one best fits the
      * dimensions of the given view while maintaining the aspect ratio. If none can,
@@ -109,26 +119,43 @@ public class CameraHelper {
      * @return the default camera on the device. Return null if there is no camera on the device.
      */
     public static Camera getDefaultCameraInstance(Activity context) {
-        boolean permissionResult = checkPermissionAndOpenCamera(context);
-        if(permissionResult)
+        //boolean permissionResult = checkPermissionAndOpenCamera(context);
+        //if(permissionResult)
             return Camera.open();
-        else
-            return null;
+        //else
+            //return null;
     }
-    static boolean checkPermissionAndOpenCamera(Activity context) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(context, new String[] {Manifest.permission.CAMERA}, 5);
+    public static boolean checkPermissionAndOpenCamera(Activity context) {
+
+        boolean checkpermission = checkPermission(context);
+        return  checkpermission;
+    }
+    public static boolean checkPermission(Activity mContext){
+
+        int result;
+        List<String> listPermissionsNeeded = new ArrayList<>();
+        for (String p : permissions) {
+            result = ContextCompat.checkSelfPermission(mContext, p);
+            if (result == PackageManager.PERMISSION_DENIED) {
+                listPermissionsNeeded.add(p);
+            }
+        }
+
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+//            if (Environment.isExternalStorageManager()) {
+//            } else {
+//                //request for the permission
+//                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+//                Uri uri = Uri.fromParts("package", mContext.getPackageName(), null);
+//                intent.setData(uri);
+//                mContext.startActivityForResult(intent, ContantsDefine.REQUEST_GET_EXCEL_FILE_PATH);
+//            }
+//        }
+        if (!listPermissionsNeeded.isEmpty()) {
+            ActivityCompat.requestPermissions(mContext, listPermissionsNeeded.toArray(new String[listPermissionsNeeded.size()]), ContantsDefine.REQUEST_ACCESS_CAMERA_AND_WRITE_EXTENAL_STORAGE);
             return false;
         }
-        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
-                == PackageManager.PERMISSION_DENIED) {
-            ActivityCompat.requestPermissions(context, new String[] {Manifest.permission.RECORD_AUDIO}, 6);
-            return  false;
-        }
-        else {
-            return  true;
-        }
+        return true;
     }
 
 
