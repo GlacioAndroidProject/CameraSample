@@ -1,0 +1,5 @@
+
+.gradle/*
+*.bin
+.gradle/5.4.1/executionHistory/executionHistory.bin
+.gradle/5.4.1/fileHashes/fileHashes.bin
