@@ -1,0 +1,4 @@
+#Sat Mar 12 14:05:10 ICT 2022
+base.0=D\:\\Projects\\AndroidJavaProject\\CameraExample\\Application\\build\\intermediates\\dex\\debug\\mergeDexDebug\\out\\classes.dex
+renamed.0=classes.dex
+path.0=classes.dex
